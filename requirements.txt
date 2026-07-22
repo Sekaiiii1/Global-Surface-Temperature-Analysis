@@ -1,0 +1,27 @@
+# =============================================================================
+# Climate Change: Earth Surface Temperature Analysis — Python dependencies
+# Cài đặt:  python -m pip install -r requirements.txt
+# Dùng mốc ">=" để chạy được trên nhiều máy; có thể freeze phiên bản chính xác sau.
+# =============================================================================
+
+# --- Lõi: notebooks 01-03 (data understanding, PostgreSQL pipeline, cleaning) ---
+pandas>=2.1
+numpy>=1.26
+matplotlib>=3.7
+psycopg2-binary>=2.9      # driver PostgreSQL cho notebook 02 (và 03 khi đọc từ DB)
+python-dotenv>=1.0        # đọc cấu hình .env, không hardcode mật khẩu
+ipykernel>=6.0            # chạy notebook trong VS Code / Jupyter
+
+# --- EDA & trực quan hóa: notebook 04 ---
+seaborn>=0.12
+
+# --- Machine learning: notebooks 05-07 ---
+scikit-learn>=1.3
+joblib>=1.3
+# xgboost>=2.0            # tùy chọn - chỉ bật khi thực sự dùng và giải thích được
+
+# --- Ứng dụng web: app/ (Streamlit + FastAPI) ---
+streamlit>=1.30
+fastapi>=0.110
+uvicorn>=0.27
+plotly>=5.18
