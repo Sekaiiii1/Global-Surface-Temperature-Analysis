@@ -1,16 +1,14 @@
 -- =============================================================================
 -- 04_aggregation.sql
--- Rebuild reusable materialized aggregations from the analytical views.
--- AVG ignores NULL temperatures; explicit coverage columns preserve visibility
--- into the number of valid and missing monthly observations in every group.
+-- Tạo sáu materialized views tổng hợp theo năm/thập kỷ.
+-- Chạy sau 03_views.sql. AVG bỏ qua NULL; các cột coverage vẫn ghi lại số quan
+-- sát hợp lệ và thiếu để Notebook 03 đánh giá chất lượng dữ liệu.
+-- Script dành cho lần khởi tạo mới và không DROP materialized view hiện có.
 -- =============================================================================
 
-DROP MATERIALIZED VIEW IF EXISTS mv_major_city_temperature_yearly CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_city_temperature_yearly CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_state_temperature_yearly CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_country_temperature_yearly CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_global_temperature_decadal CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_global_temperature_yearly CASCADE;
+-- -----------------------------------------------------------------------------
+-- 1. Tạo các bảng tổng hợp materialized.
+-- -----------------------------------------------------------------------------
 
 CREATE MATERIALIZED VIEW mv_global_temperature_yearly AS
 SELECT
@@ -148,3 +146,111 @@ COMMENT ON MATERIALIZED VIEW mv_city_temperature_yearly IS
     'Annual city temperature aggregation with monthly coverage metrics';
 COMMENT ON MATERIALIZED VIEW mv_major_city_temperature_yearly IS
     'Annual major-city temperature aggregation with monthly coverage metrics';
+
+-- -----------------------------------------------------------------------------
+-- 2. Kiểm tra grain, khóa NULL và tính nhất quán của coverage.
+-- -----------------------------------------------------------------------------
+
+WITH validation AS (
+    SELECT
+        'mv_global_temperature_yearly'::TEXT AS materialized_view,
+        COUNT(*)::BIGINT AS row_count,
+        COUNT(*) - COUNT(DISTINCT year) AS duplicate_grain_rows,
+        COUNT(*) FILTER (WHERE year IS NULL) AS null_grain_rows,
+        COUNT(*) FILTER (
+            WHERE observation_months <= 0
+               OR valid_temperature_months < 0
+               OR missing_temperature_months < 0
+               OR valid_temperature_months
+                  + missing_temperature_months
+                  <> observation_months
+        ) AS invalid_coverage_rows
+    FROM mv_global_temperature_yearly
+
+    UNION ALL
+
+    SELECT
+        'mv_global_temperature_decadal',
+        COUNT(*),
+        COUNT(*) - COUNT(DISTINCT decade),
+        COUNT(*) FILTER (WHERE decade IS NULL),
+        COUNT(*) FILTER (
+            WHERE observation_months <= 0
+               OR valid_temperature_months
+                  + missing_temperature_months
+                  <> observation_months
+        )
+    FROM mv_global_temperature_decadal
+
+    UNION ALL
+
+    SELECT
+        'mv_country_temperature_yearly',
+        COUNT(*),
+        COUNT(*) - COUNT(DISTINCT (country_id, year)),
+        COUNT(*) FILTER (WHERE country_id IS NULL OR year IS NULL),
+        COUNT(*) FILTER (
+            WHERE observation_months <= 0
+               OR valid_temperature_months
+                  + missing_temperature_months
+                  <> observation_months
+        )
+    FROM mv_country_temperature_yearly
+
+    UNION ALL
+
+    SELECT
+        'mv_state_temperature_yearly',
+        COUNT(*),
+        COUNT(*) - COUNT(DISTINCT (state_id, year)),
+        COUNT(*) FILTER (WHERE state_id IS NULL OR year IS NULL),
+        COUNT(*) FILTER (
+            WHERE observation_months <= 0
+               OR valid_temperature_months
+                  + missing_temperature_months
+                  <> observation_months
+        )
+    FROM mv_state_temperature_yearly
+
+    UNION ALL
+
+    SELECT
+        'mv_city_temperature_yearly',
+        COUNT(*),
+        COUNT(*) - COUNT(DISTINCT (city_id, year)),
+        COUNT(*) FILTER (WHERE city_id IS NULL OR year IS NULL),
+        COUNT(*) FILTER (
+            WHERE observation_months <= 0
+               OR valid_temperature_months
+                  + missing_temperature_months
+                  <> observation_months
+        )
+    FROM mv_city_temperature_yearly
+
+    UNION ALL
+
+    SELECT
+        'mv_major_city_temperature_yearly',
+        COUNT(*),
+        COUNT(*) - COUNT(DISTINCT (city_id, year)),
+        COUNT(*) FILTER (WHERE city_id IS NULL OR year IS NULL),
+        COUNT(*) FILTER (
+            WHERE observation_months <= 0
+               OR valid_temperature_months
+                  + missing_temperature_months
+                  <> observation_months
+        )
+    FROM mv_major_city_temperature_yearly
+)
+SELECT
+    *,
+    CASE
+        WHEN row_count > 0
+         AND duplicate_grain_rows = 0
+         AND null_grain_rows = 0
+         AND invalid_coverage_rows = 0
+        THEN 'PASS'
+        ELSE 'FAIL'
+    END AS status
+FROM validation
+ORDER BY materialized_view;
