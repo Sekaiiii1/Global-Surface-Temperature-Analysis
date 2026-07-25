@@ -216,5 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+<<<<<<< HEAD
 data/raw/*
 !data/raw/README.md
+=======
+
+# Project data files
+data/raw/*
+!data/raw/README.md
+data/processed/
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab

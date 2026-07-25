@@ -1,5 +1,6 @@
 -- =============================================================================
 -- 01_create_tables.sql
+<<<<<<< HEAD
 -- Recreate the PostgreSQL staging and analytical layers.
 -- WARNING: DROP TABLE ... CASCADE removes existing data and dependants.
 -- This script is executed inside a transaction controlled by Notebook 02.
@@ -10,6 +11,19 @@ DROP TABLE IF EXISTS staging_city CASCADE;
 DROP TABLE IF EXISTS staging_state CASCADE;
 DROP TABLE IF EXISTS staging_country CASCADE;
 DROP TABLE IF EXISTS staging_global CASCADE;
+=======
+-- Tạo mới toàn bộ cấu trúc staging và mô hình phân tích.
+-- Chạy một lần trên database climate_db mới, trước 02_import_data.sql.
+-- Script không DROP object cũ; nếu bảng đã tồn tại, PostgreSQL sẽ báo lỗi để
+-- tránh vô tình xóa dữ liệu.
+-- =============================================================================
+
+BEGIN;
+
+-- -----------------------------------------------------------------------------
+-- 1. Staging tables: phản ánh cấu trúc của năm tệp CSV nguồn.
+-- -----------------------------------------------------------------------------
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 
 CREATE TABLE staging_global (
     staging_id BIGSERIAL PRIMARY KEY,
@@ -25,6 +39,12 @@ CREATE TABLE staging_global (
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+<<<<<<< HEAD
+=======
+COMMENT ON TABLE staging_global IS
+    'Raw monthly global data from GlobalTemperatures.csv';
+
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 CREATE TABLE staging_country (
     staging_id BIGSERIAL PRIMARY KEY,
     dt DATE,
@@ -34,6 +54,12 @@ CREATE TABLE staging_country (
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+<<<<<<< HEAD
+=======
+COMMENT ON TABLE staging_country IS
+    'Raw monthly country data from GlobalLandTemperaturesByCountry.csv';
+
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 CREATE TABLE staging_state (
     staging_id BIGSERIAL PRIMARY KEY,
     dt DATE,
@@ -44,6 +70,12 @@ CREATE TABLE staging_state (
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+<<<<<<< HEAD
+=======
+COMMENT ON TABLE staging_state IS
+    'Raw monthly state data from GlobalLandTemperaturesByState.csv';
+
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 CREATE TABLE staging_city (
     staging_id BIGSERIAL PRIMARY KEY,
     dt DATE,
@@ -56,6 +88,12 @@ CREATE TABLE staging_city (
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+<<<<<<< HEAD
+=======
+COMMENT ON TABLE staging_city IS
+    'Raw monthly city data from GlobalLandTemperaturesByCity.csv';
+
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 CREATE TABLE staging_major_city (
     staging_id BIGSERIAL PRIMARY KEY,
     dt DATE,
@@ -68,6 +106,7 @@ CREATE TABLE staging_major_city (
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+<<<<<<< HEAD
 COMMENT ON TABLE staging_global IS
     'Raw monthly global temperature data imported from GlobalTemperatures.csv';
 COMMENT ON TABLE staging_country IS
@@ -92,6 +131,14 @@ DROP TABLE IF EXISTS dim_city CASCADE;
 DROP TABLE IF EXISTS dim_state CASCADE;
 DROP TABLE IF EXISTS dim_country CASCADE;
 DROP TABLE IF EXISTS dim_date CASCADE;
+=======
+COMMENT ON TABLE staging_major_city IS
+    'Raw monthly major-city data from GlobalLandTemperaturesByMajorCity.csv';
+
+-- -----------------------------------------------------------------------------
+-- 2. Dimension tables: chuẩn hóa thời gian và thực thể địa lý.
+-- -----------------------------------------------------------------------------
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 
 CREATE TABLE dim_date (
     date_id BIGSERIAL PRIMARY KEY,
@@ -127,6 +174,14 @@ CREATE TABLE dim_city (
     CHECK (BTRIM(city_name) <> '')
 );
 
+<<<<<<< HEAD
+=======
+-- -----------------------------------------------------------------------------
+-- 3. Fact tables: lưu các quan sát nhiệt độ theo grain tháng.
+-- source_staging_id duy trì lineage về đúng dòng dữ liệu staging.
+-- -----------------------------------------------------------------------------
+
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 CREATE TABLE fact_global_temperature (
     global_temperature_id BIGSERIAL PRIMARY KEY,
     date_id BIGINT NOT NULL REFERENCES dim_date(date_id),
@@ -182,6 +237,7 @@ CREATE TABLE fact_major_city_temperature (
     UNIQUE (date_id, city_id)
 );
 
+<<<<<<< HEAD
 COMMENT ON TABLE dim_date IS 'Calendar dimension shared by all temperature facts';
 COMMENT ON TABLE dim_country IS 'Normalized country names from all geographic datasets';
 COMMENT ON TABLE dim_state IS 'Normalized state-country combinations';
@@ -193,3 +249,39 @@ COMMENT ON TABLE fact_city_temperature IS 'Monthly city temperature observations
 COMMENT ON TABLE fact_major_city_temperature IS 'Monthly major-city temperature observations';
 
 -- END ANALYTICAL_SCHEMA
+=======
+COMMENT ON TABLE dim_date IS
+    'Calendar dimension shared by all temperature facts';
+COMMENT ON TABLE dim_country IS
+    'Normalized country names from all geographic datasets';
+COMMENT ON TABLE dim_state IS
+    'Normalized state-country combinations';
+COMMENT ON TABLE dim_city IS
+    'Normalized city-country-coordinate combinations';
+COMMENT ON TABLE fact_global_temperature IS
+    'Monthly global temperature observations';
+COMMENT ON TABLE fact_country_temperature IS
+    'Monthly country temperature observations';
+COMMENT ON TABLE fact_state_temperature IS
+    'Monthly state temperature observations';
+COMMENT ON TABLE fact_city_temperature IS
+    'Monthly city temperature observations';
+COMMENT ON TABLE fact_major_city_temperature IS
+    'Monthly major-city temperature observations';
+
+COMMIT;
+
+-- Xác nhận năm staging tables đã được tạo và đang rỗng.
+-- Phải trả về đúng 5 bảng, mỗi bảng có row_count = 0.
+SELECT 'staging_global' AS table_name, COUNT(*) AS row_count
+FROM staging_global
+UNION ALL
+SELECT 'staging_country', COUNT(*) FROM staging_country
+UNION ALL
+SELECT 'staging_state', COUNT(*) FROM staging_state
+UNION ALL
+SELECT 'staging_city', COUNT(*) FROM staging_city
+UNION ALL
+SELECT 'staging_major_city', COUNT(*) FROM staging_major_city
+ORDER BY table_name;
+>>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
