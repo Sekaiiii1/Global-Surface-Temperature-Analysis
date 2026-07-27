@@ -1,207 +1,13 @@
 -- =============================================================================
 -- 02_import_data.sql
--- Import CSV, kiểm tra staging, cắt trực tiếp dữ liệu City, rồi nạp dimension/fact.
--- Chạy trong pgAdmin 4 Query Tool khi đang kết nối database climate_db.
---
--- LƯU Ý:
--- - Các bảng phải mới và đang rỗng do 01_create_tables.sql tạo ra.
--- - COPY là server-side COPY: tài khoản dịch vụ PostgreSQL cần quyền đọc data/raw.
--- - Sửa đường dẫn tuyệt đối bên dưới nếu repository được đặt ở vị trí khác.
--- - Nếu một COPY thất bại, transaction import sẽ bị hủy; chạy ROLLBACK nếu
---   Query Tool vẫn còn ở trạng thái aborted, sửa lỗi đường dẫn/quyền rồi import lại.
--- - Dữ liệu City được cắt trực tiếp trên staging_city và không thể phục hồi nếu
---   không import lại CSV nguồn.
+-- COPY bốn CSV, cắt staging_city theo data contract, nạp dimensions/facts.
+-- Chạy trên database climate_db sau 01_create_tables.sql.
+-- Sửa đường dẫn COPY theo máy thực thi; dữ liệu City bị cắt trực tiếp.
 -- =============================================================================
 
--- -----------------------------------------------------------------------------
--- 1. Import năm tệp CSV vào staging.
--- -----------------------------------------------------------------------------
-
-BEGIN;
-
-
--- GlobalTemperatures.csv
-COPY staging_global (
-    dt,
-    land_average_temperature,
-    land_average_temperature_uncertainty,
-    land_max_temperature,
-    land_max_temperature_uncertainty,
-    land_min_temperature,
-    land_min_temperature_uncertainty,
-    land_and_ocean_average_temperature,
-    land_and_ocean_average_temperature_uncertainty
-)
-FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalTemperatures.csv'
-WITH (
-    FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
-    NULL '', ENCODING 'UTF8'
-);
-
--- GlobalLandTemperaturesByCountry.csv
-COPY staging_country (
-    dt,
-    average_temperature,
-    average_temperature_uncertainty,
-    country
-)
-FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByCountry.csv'
-WITH (
-    FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
-    NULL '', ENCODING 'UTF8'
-);
-
--- GlobalLandTemperaturesByState.csv
-COPY staging_state (
-    dt,
-    average_temperature,
-    average_temperature_uncertainty,
-    state,
-    country
-)
-FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByState.csv'
-WITH (
-    FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
-    NULL '', ENCODING 'UTF8'
-);
-
--- GlobalLandTemperaturesByCity.csv
-COPY staging_city (
-    dt,
-    average_temperature,
-    average_temperature_uncertainty,
-    city,
-    country,
-    latitude,
-    longitude
-)
-FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByCity.csv'
-WITH (
-    FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
-    NULL '', ENCODING 'UTF8'
-);
-
--- GlobalLandTemperaturesByMajorCity.csv
-COPY staging_major_city (
-    dt,
-    average_temperature,
-    average_temperature_uncertainty,
-    city,
-    country,
-    latitude,
-    longitude
-)
-FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByMajorCity.csv'
-WITH (
-    FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
-    NULL '', ENCODING 'UTF8'
-);
-
-COMMIT;
 
 -- -----------------------------------------------------------------------------
--- 2. Kiểm tra số dòng và duplicate sau import.
--- City nguyên bản phải có 8.599.212 dòng trước khi cắt ở phần kế tiếp.
--- -----------------------------------------------------------------------------
-
-WITH expected(dataset, expected_rows) AS (
-    VALUES
-        ('global', 3192::BIGINT),
-        ('country', 577462::BIGINT),
-        ('state', 645675::BIGINT),
-        ('city', 8599212::BIGINT), -- Dữ liệu City nguyên bản, trước khi cắt ở Mục 8.
-        ('major_city', 239177::BIGINT)
-),
-actual(dataset, actual_rows, min_staging_id, max_staging_id, null_loaded_at) AS (
-    SELECT
-        'global',
-        COUNT(*),
-        MIN(staging_id),
-        MAX(staging_id),
-        COUNT(*) FILTER (WHERE loaded_at IS NULL)
-    FROM staging_global
-    UNION ALL
-    SELECT
-        'country',
-        COUNT(*),
-        MIN(staging_id),
-        MAX(staging_id),
-        COUNT(*) FILTER (WHERE loaded_at IS NULL)
-    FROM staging_country
-    UNION ALL
-    SELECT
-        'state',
-        COUNT(*),
-        MIN(staging_id),
-        MAX(staging_id),
-        COUNT(*) FILTER (WHERE loaded_at IS NULL)
-    FROM staging_state
-    UNION ALL
-    SELECT
-        'city',
-        COUNT(*),
-        MIN(staging_id),
-        MAX(staging_id),
-        COUNT(*) FILTER (WHERE loaded_at IS NULL)
-    FROM staging_city
-    UNION ALL
-    SELECT
-        'major_city',
-        COUNT(*),
-        MIN(staging_id),
-        MAX(staging_id),
-        COUNT(*) FILTER (WHERE loaded_at IS NULL)
-    FROM staging_major_city
-)
-SELECT
-    e.dataset,
-    e.expected_rows,
-    a.actual_rows,
-    a.actual_rows - e.expected_rows AS difference,
-    a.min_staging_id,
-    a.max_staging_id,
-    a.null_loaded_at,
-    CASE
-        WHEN a.actual_rows = e.expected_rows
-         AND a.min_staging_id = 1
-         AND a.max_staging_id = a.actual_rows
-         AND a.null_loaded_at = 0
-        THEN 'PASS'
-        ELSE 'FAIL'
-    END AS status
-FROM expected AS e
-JOIN actual AS a USING (dataset)
-ORDER BY e.dataset;
-
--- Duplicate theo grain nghiệp vụ; giá trị 0 là kết quả mong đợi.
-SELECT
-    'global' AS dataset,
-    COUNT(*) - COUNT(DISTINCT (dt)) AS duplicate_business_keys
-FROM staging_global
-UNION ALL
-SELECT
-    'country',
-    COUNT(*) - COUNT(DISTINCT (dt, country))
-FROM staging_country
-UNION ALL
-SELECT
-    'state',
-    COUNT(*) - COUNT(DISTINCT (dt, state, country))
-FROM staging_state
-UNION ALL
-SELECT
-    'city',
-    COUNT(*) - COUNT(DISTINCT (dt, city, country, latitude, longitude))
-FROM staging_city
-UNION ALL
-SELECT
-    'major_city',
-    COUNT(*) - COUNT(DISTINCT (dt, city, country, latitude, longitude))
-FROM staging_major_city
-ORDER BY dataset;
-
--- -----------------------------------------------------------------------------
--- 3. Kiểm tra điều kiện đầu vào và giữ cố định 80 quốc gia trong staging_city.
+-- Kiểm tra dữ liệu City trước khi lọc
 -- -----------------------------------------------------------------------------
 
 -- Danh sách 20 quốc gia lớn/bắt buộc theo yêu cầu của bước cắt dữ liệu.
@@ -245,7 +51,117 @@ FROM source_stats AS s;
 
 BEGIN;
 
--- Tạo manifest cố định gồm 80 quốc gia để kết quả không đổi giữa các lần chạy.
+-- -----------------------------------------------------------------------------
+-- COPY 1
+-- -----------------------------------------------------------------------------
+
+COPY staging_global (
+    dt,
+    land_average_temperature,
+    land_average_temperature_uncertainty,
+    land_max_temperature,
+    land_max_temperature_uncertainty,
+    land_min_temperature,
+    land_min_temperature_uncertainty,
+    land_and_ocean_average_temperature,
+    land_and_ocean_average_temperature_uncertainty
+)
+FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalTemperatures.csv'
+WITH (
+    FORMAT CSV,
+    HEADER TRUE,
+    DELIMITER ',',
+    QUOTE '"',
+    ESCAPE '"',
+    NULL '',
+    ENCODING 'UTF8'
+);
+
+
+-- -----------------------------------------------------------------------------
+-- COPY 2
+-- -----------------------------------------------------------------------------
+
+COPY staging_country (
+    dt,
+    average_temperature,
+    average_temperature_uncertainty,
+    country
+)
+FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByCountry.csv'
+WITH (
+    FORMAT CSV,
+    HEADER TRUE,
+    DELIMITER ',',
+    QUOTE '"',
+    ESCAPE '"',
+    NULL '',
+    ENCODING 'UTF8'
+);
+
+
+-- -----------------------------------------------------------------------------
+-- COPY 3
+-- -----------------------------------------------------------------------------
+
+COPY staging_city (
+    dt,
+    average_temperature,
+    average_temperature_uncertainty,
+    city,
+    country,
+    latitude,
+    longitude
+)
+FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByCity.csv'
+WITH (
+    FORMAT CSV,
+    HEADER TRUE,
+    DELIMITER ',',
+    QUOTE '"',
+    ESCAPE '"',
+    NULL '',
+    ENCODING 'UTF8'
+);
+
+
+-- -----------------------------------------------------------------------------
+-- COPY 4
+-- -----------------------------------------------------------------------------
+
+COPY staging_major_city (
+    dt,
+    average_temperature,
+    average_temperature_uncertainty,
+    city,
+    country,
+    latitude,
+    longitude
+)
+FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByMajorCity.csv'
+WITH (
+    FORMAT CSV,
+    HEADER TRUE,
+    DELIMITER ',',
+    QUOTE '"',
+    ESCAPE '"',
+    NULL '',
+    ENCODING 'UTF8'
+);
+
+COMMIT;
+
+
+-- -----------------------------------------------------------------------------
+-- Lọc 80 quốc gia mục tiêu
+-- -----------------------------------------------------------------------------
+
+BEGIN;
+
+-- Tạo lại manifest quốc gia dùng cho thao tác cắt trực tiếp.
+DROP TABLE IF EXISTS city_target_countries;
+
+-- Lưu cố định 80 quốc gia để kết quả không thay đổi giữa các lần chạy.
 CREATE TABLE city_target_countries (
     country TEXT PRIMARY KEY,
     selection_group TEXT NOT NULL CHECK (
@@ -425,9 +341,9 @@ SELECT
     END AS status
 FROM staging_city;
 
+
 -- -----------------------------------------------------------------------------
--- 4. Giới hạn staging_city trong giai đoạn 1863-01-01 đến trước 2014-01-01.
--- Data contract cuối: 5.010.113 dòng thuộc 80 quốc gia.
+-- Kiểm tra dải thời gian trước khi lọc
 -- -----------------------------------------------------------------------------
 
 -- Đánh giá dải thời gian trước khi tạo bảng City cuối cùng.
@@ -438,6 +354,11 @@ SELECT
     COUNT(DISTINCT dt) AS distinct_dates_before_filter,
     COUNT(*) FILTER (WHERE dt IS NULL) AS null_date_rows
 FROM staging_city;
+
+
+-- -----------------------------------------------------------------------------
+-- Lọc City theo khoảng 1863-01-01 đến trước 2014-01-01
+-- -----------------------------------------------------------------------------
 
 BEGIN;
 
@@ -538,11 +459,12 @@ SELECT
     END AS status
 FROM validation;
 
--- -----------------------------------------------------------------------------
--- 5. Nạp dimension tables.
--- -----------------------------------------------------------------------------
 
 BEGIN;
+
+-- -----------------------------------------------------------------------------
+-- Nạp dimensions
+-- -----------------------------------------------------------------------------
 
 INSERT INTO dim_date (full_date, year, month, quarter, decade)
 SELECT
@@ -556,20 +478,21 @@ FROM (
     UNION
     SELECT dt FROM staging_country WHERE dt IS NOT NULL
     UNION
-    SELECT dt FROM staging_state WHERE dt IS NOT NULL
-    UNION
     SELECT dt FROM staging_city WHERE dt IS NOT NULL
     UNION
     SELECT dt FROM staging_major_city WHERE dt IS NOT NULL
 ) AS source_dates
 ORDER BY full_date;
 
+
+-- -----------------------------------------------------------------------------
+-- Nạp dim_country
+-- -----------------------------------------------------------------------------
+
 INSERT INTO dim_country (country_name)
 SELECT country_name
 FROM (
     SELECT NULLIF(BTRIM(country), '') AS country_name FROM staging_country
-    UNION
-    SELECT NULLIF(BTRIM(country), '') FROM staging_state
     UNION
     SELECT NULLIF(BTRIM(country), '') FROM staging_city
     UNION
@@ -578,13 +501,10 @@ FROM (
 WHERE country_name IS NOT NULL
 ORDER BY country_name;
 
-INSERT INTO dim_state (state_name, country_id)
-SELECT DISTINCT BTRIM(s.state), c.country_id
-FROM staging_state AS s
-JOIN dim_country AS c
-  ON c.country_name = BTRIM(s.country)
-WHERE NULLIF(BTRIM(s.state), '') IS NOT NULL
-ORDER BY BTRIM(s.state), c.country_id;
+
+-- -----------------------------------------------------------------------------
+-- Nạp dim_city và chuẩn hóa tọa độ
+-- -----------------------------------------------------------------------------
 
 WITH city_source AS (
     SELECT
@@ -666,11 +586,11 @@ ORDER BY
 
 COMMIT;
 
--- -----------------------------------------------------------------------------
--- 6. Nạp fact tables và bảo toàn source_staging_id để truy vết nguồn.
--- -----------------------------------------------------------------------------
-
 BEGIN;
+
+-- -----------------------------------------------------------------------------
+-- Nạp fact global
+-- -----------------------------------------------------------------------------
 
 INSERT INTO fact_global_temperature (
     date_id,
@@ -698,6 +618,11 @@ SELECT
 FROM staging_global AS s
 JOIN dim_date AS d ON d.full_date = s.dt;
 
+
+-- -----------------------------------------------------------------------------
+-- Nạp fact country
+-- -----------------------------------------------------------------------------
+
 INSERT INTO fact_country_temperature (
     date_id,
     country_id,
@@ -715,25 +640,10 @@ FROM staging_country AS s
 JOIN dim_date AS d ON d.full_date = s.dt
 JOIN dim_country AS c ON c.country_name = BTRIM(s.country);
 
-INSERT INTO fact_state_temperature (
-    date_id,
-    state_id,
-    source_staging_id,
-    average_temperature,
-    average_temperature_uncertainty
-)
-SELECT
-    d.date_id,
-    st.state_id,
-    s.staging_id,
-    s.average_temperature,
-    s.average_temperature_uncertainty
-FROM staging_state AS s
-JOIN dim_date AS d ON d.full_date = s.dt
-JOIN dim_country AS c ON c.country_name = BTRIM(s.country)
-JOIN dim_state AS st
-  ON st.country_id = c.country_id
- AND st.state_name = BTRIM(s.state);
+
+-- -----------------------------------------------------------------------------
+-- Nạp fact city
+-- -----------------------------------------------------------------------------
 
 WITH normalized_city AS (
     SELECT
@@ -782,6 +692,11 @@ JOIN dim_city AS ci
  AND ci.city_name = n.city_name
  AND ci.latitude = n.latitude
  AND ci.longitude = n.longitude;
+
+
+-- -----------------------------------------------------------------------------
+-- Nạp fact major city
+-- -----------------------------------------------------------------------------
 
 WITH normalized_major_city AS (
     SELECT
@@ -833,15 +748,15 @@ JOIN dim_city AS ci
 
 COMMIT;
 
+
 -- -----------------------------------------------------------------------------
--- 7. Xác minh số dòng fact và tham khảo số dòng dimension.
+-- Validation fact counts và dimensions
 -- -----------------------------------------------------------------------------
 
 WITH expected(dataset, expected_rows) AS (
     VALUES
         ('global', 3192::BIGINT),
         ('country', 577462::BIGINT),
-        ('state', 645675::BIGINT),
         ('city', 5010113::BIGINT),
         ('major_city', 239177::BIGINT)
 ),
@@ -857,12 +772,6 @@ actual(dataset, fact_table, actual_rows) AS (
         'fact_country_temperature',
         COUNT(*)
     FROM fact_country_temperature
-    UNION ALL
-    SELECT
-        'state',
-        'fact_state_temperature',
-        COUNT(*)
-    FROM fact_state_temperature
     UNION ALL
     SELECT
         'city',
@@ -894,8 +803,6 @@ ORDER BY e.dataset;
 SELECT 'dim_date' AS table_name, COUNT(*) AS row_count FROM dim_date
 UNION ALL
 SELECT 'dim_country', COUNT(*) FROM dim_country
-UNION ALL
-SELECT 'dim_state', COUNT(*) FROM dim_state
 UNION ALL
 SELECT 'dim_city', COUNT(*) FROM dim_city
 ORDER BY table_name;
