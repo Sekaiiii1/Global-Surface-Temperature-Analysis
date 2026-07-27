@@ -1,17 +1,5 @@
 -- =============================================================================
 -- 02_import_data.sql
-<<<<<<< HEAD
--- COPY templates used by notebooks/02_postgresql_pipeline.ipynb.
---
--- These statements use COPY ... FROM STDIN. They require a client such as
--- psycopg2 to open each local CSV and stream its contents to PostgreSQL.
--- Do not execute this entire file directly without providing STDIN data.
--- Empty, unquoted CSV fields are imported as SQL NULL values.
--- =============================================================================
-
--- GlobalTemperatures.csv
-TRUNCATE TABLE staging_global RESTART IDENTITY;
-=======
 -- Import CSV, kiểm tra staging, cắt trực tiếp dữ liệu City, rồi nạp dimension/fact.
 -- Chạy trong pgAdmin 4 Query Tool khi đang kết nối database climate_db.
 --
@@ -33,7 +21,6 @@ BEGIN;
 
 
 -- GlobalTemperatures.csv
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 COPY staging_global (
     dt,
     land_average_temperature,
@@ -45,13 +32,6 @@ COPY staging_global (
     land_and_ocean_average_temperature,
     land_and_ocean_average_temperature_uncertainty
 )
-<<<<<<< HEAD
-FROM STDIN
-WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '');
-
--- GlobalLandTemperaturesByCountry.csv
-TRUNCATE TABLE staging_country RESTART IDENTITY;
-=======
 FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalTemperatures.csv'
 WITH (
     FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
@@ -59,20 +39,12 @@ WITH (
 );
 
 -- GlobalLandTemperaturesByCountry.csv
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 COPY staging_country (
     dt,
     average_temperature,
     average_temperature_uncertainty,
     country
 )
-<<<<<<< HEAD
-FROM STDIN
-WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '');
-
--- GlobalLandTemperaturesByState.csv
-TRUNCATE TABLE staging_state RESTART IDENTITY;
-=======
 FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByCountry.csv'
 WITH (
     FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
@@ -80,7 +52,6 @@ WITH (
 );
 
 -- GlobalLandTemperaturesByState.csv
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 COPY staging_state (
     dt,
     average_temperature,
@@ -88,13 +59,6 @@ COPY staging_state (
     state,
     country
 )
-<<<<<<< HEAD
-FROM STDIN
-WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '');
-
--- GlobalLandTemperaturesByCity.csv
-TRUNCATE TABLE staging_city RESTART IDENTITY;
-=======
 FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByState.csv'
 WITH (
     FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
@@ -102,7 +66,6 @@ WITH (
 );
 
 -- GlobalLandTemperaturesByCity.csv
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 COPY staging_city (
     dt,
     average_temperature,
@@ -112,13 +75,6 @@ COPY staging_city (
     latitude,
     longitude
 )
-<<<<<<< HEAD
-FROM STDIN
-WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '');
-
--- GlobalLandTemperaturesByMajorCity.csv
-TRUNCATE TABLE staging_major_city RESTART IDENTITY;
-=======
 FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByCity.csv'
 WITH (
     FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
@@ -126,7 +82,6 @@ WITH (
 );
 
 -- GlobalLandTemperaturesByMajorCity.csv
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 COPY staging_major_city (
     dt,
     average_temperature,
@@ -136,10 +91,6 @@ COPY staging_major_city (
     latitude,
     longitude
 )
-<<<<<<< HEAD
-FROM STDIN
-WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '');
-=======
 FROM 'E:/FPT/HocKy3/PROJECT_1/PROJECT/Global-Surface-Temperature-Analysis/data/raw/GlobalLandTemperaturesByMajorCity.csv'
 WITH (
     FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '"', ESCAPE '"',
@@ -948,4 +899,3 @@ SELECT 'dim_state', COUNT(*) FROM dim_state
 UNION ALL
 SELECT 'dim_city', COUNT(*) FROM dim_city
 ORDER BY table_name;
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab

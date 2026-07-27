@@ -1,12 +1,5 @@
 -- =============================================================================
 -- 05_indexes.sql
-<<<<<<< HEAD
--- Add non-duplicative lookup indexes after bulk loading and aggregation.
--- Primary-key and UNIQUE indexes already created by 01_create_tables.sql are
--- intentionally not repeated here.
--- =============================================================================
-
-=======
 -- Tạo index, cập nhật statistics, kiểm tra execution plan và final audit.
 -- Chạy cuối cùng, sau khi bulk load và materialized aggregation đã hoàn tất.
 -- Primary key và UNIQUE constraint từ 01_create_tables.sql không được lặp lại.
@@ -16,7 +9,6 @@
 -- 1. Index cho staging/fact, dimension và materialized views.
 -- -----------------------------------------------------------------------------
 
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 CREATE INDEX IF NOT EXISTS idx_staging_country_country_dt
     ON staging_country (country, dt);
 
@@ -56,14 +48,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_mv_city_temperature_yearly_grain
 CREATE UNIQUE INDEX IF NOT EXISTS ux_mv_major_city_temperature_yearly_grain
     ON mv_major_city_temperature_yearly (city_id, year);
 
-<<<<<<< HEAD
-=======
 -- -----------------------------------------------------------------------------
 -- 2. Cập nhật statistics để query planner chọn execution plan phù hợp.
 -- ANALYZE không thay đổi dữ liệu trong bảng.
 -- -----------------------------------------------------------------------------
 
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 ANALYZE staging_country;
 ANALYZE fact_country_temperature;
 ANALYZE fact_state_temperature;
@@ -77,8 +66,6 @@ ANALYZE mv_country_temperature_yearly;
 ANALYZE mv_state_temperature_yearly;
 ANALYZE mv_city_temperature_yearly;
 ANALYZE mv_major_city_temperature_yearly;
-<<<<<<< HEAD
-=======
 
 -- -----------------------------------------------------------------------------
 -- 3. Xác nhận đủ 13 index do pipeline chủ động tạo.
@@ -376,4 +363,3 @@ SELECT *
 FROM vw_major_city_temperature
 ORDER BY major_city_temperature_id
 LIMIT 10;
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab

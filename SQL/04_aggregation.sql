@@ -1,18 +1,5 @@
 -- =============================================================================
 -- 04_aggregation.sql
-<<<<<<< HEAD
--- Rebuild reusable materialized aggregations from the analytical views.
--- AVG ignores NULL temperatures; explicit coverage columns preserve visibility
--- into the number of valid and missing monthly observations in every group.
--- =============================================================================
-
-DROP MATERIALIZED VIEW IF EXISTS mv_major_city_temperature_yearly CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_city_temperature_yearly CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_state_temperature_yearly CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_country_temperature_yearly CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_global_temperature_decadal CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mv_global_temperature_yearly CASCADE;
-=======
 -- Tạo sáu materialized views tổng hợp theo năm/thập kỷ.
 -- Chạy sau 03_views.sql. AVG bỏ qua NULL; các cột coverage vẫn ghi lại số quan
 -- sát hợp lệ và thiếu để Notebook 03 đánh giá chất lượng dữ liệu.
@@ -22,7 +9,6 @@ DROP MATERIALIZED VIEW IF EXISTS mv_global_temperature_yearly CASCADE;
 -- -----------------------------------------------------------------------------
 -- 1. Tạo các bảng tổng hợp materialized.
 -- -----------------------------------------------------------------------------
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 
 CREATE MATERIALIZED VIEW mv_global_temperature_yearly AS
 SELECT
@@ -160,8 +146,6 @@ COMMENT ON MATERIALIZED VIEW mv_city_temperature_yearly IS
     'Annual city temperature aggregation with monthly coverage metrics';
 COMMENT ON MATERIALIZED VIEW mv_major_city_temperature_yearly IS
     'Annual major-city temperature aggregation with monthly coverage metrics';
-<<<<<<< HEAD
-=======
 
 -- -----------------------------------------------------------------------------
 -- 2. Kiểm tra grain, khóa NULL và tính nhất quán của coverage.
@@ -270,4 +254,3 @@ SELECT
     END AS status
 FROM validation
 ORDER BY materialized_view;
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab

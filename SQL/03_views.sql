@@ -1,19 +1,5 @@
 -- =============================================================================
 -- 03_views.sql
-<<<<<<< HEAD
--- Reusable analytical views over the normalized dimension and fact tables.
--- Views retain rows with NULL temperature values and expose source_staging_id
--- for lineage back to the staging layer.
--- =============================================================================
-
-DROP VIEW IF EXISTS vw_major_city_temperature CASCADE;
-DROP VIEW IF EXISTS vw_city_temperature CASCADE;
-DROP VIEW IF EXISTS vw_state_temperature CASCADE;
-DROP VIEW IF EXISTS vw_country_temperature CASCADE;
-DROP VIEW IF EXISTS vw_global_temperature CASCADE;
-
-CREATE VIEW vw_global_temperature AS
-=======
 -- Tạo các monthly analytical views và xác minh các phép join.
 -- Chạy sau khi 02_import_data.sql đã nạp đủ dimension và fact.
 -- CREATE OR REPLACE VIEW cho phép cập nhật định nghĩa view mà không xóa dữ liệu.
@@ -24,7 +10,6 @@ CREATE VIEW vw_global_temperature AS
 -- -----------------------------------------------------------------------------
 
 CREATE OR REPLACE VIEW vw_global_temperature AS
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 SELECT
     f.global_temperature_id,
     f.source_staging_id,
@@ -45,11 +30,7 @@ SELECT
 FROM fact_global_temperature AS f
 JOIN dim_date AS d ON d.date_id = f.date_id;
 
-<<<<<<< HEAD
-CREATE VIEW vw_country_temperature AS
-=======
 CREATE OR REPLACE VIEW vw_country_temperature AS
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 SELECT
     f.country_temperature_id,
     f.source_staging_id,
@@ -67,11 +48,7 @@ FROM fact_country_temperature AS f
 JOIN dim_date AS d ON d.date_id = f.date_id
 JOIN dim_country AS c ON c.country_id = f.country_id;
 
-<<<<<<< HEAD
-CREATE VIEW vw_state_temperature AS
-=======
 CREATE OR REPLACE VIEW vw_state_temperature AS
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 SELECT
     f.state_temperature_id,
     f.source_staging_id,
@@ -92,11 +69,7 @@ JOIN dim_date AS d ON d.date_id = f.date_id
 JOIN dim_state AS s ON s.state_id = f.state_id
 JOIN dim_country AS c ON c.country_id = s.country_id;
 
-<<<<<<< HEAD
-CREATE VIEW vw_city_temperature AS
-=======
 CREATE OR REPLACE VIEW vw_city_temperature AS
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 SELECT
     f.city_temperature_id,
     f.source_staging_id,
@@ -120,11 +93,7 @@ JOIN dim_date AS d ON d.date_id = f.date_id
 JOIN dim_city AS ci ON ci.city_id = f.city_id
 JOIN dim_country AS c ON c.country_id = ci.country_id;
 
-<<<<<<< HEAD
-CREATE VIEW vw_major_city_temperature AS
-=======
 CREATE OR REPLACE VIEW vw_major_city_temperature AS
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
 SELECT
     f.major_city_temperature_id,
     f.source_staging_id,
@@ -153,8 +122,6 @@ COMMENT ON VIEW vw_country_temperature IS 'Country temperature facts enriched wi
 COMMENT ON VIEW vw_state_temperature IS 'State temperature facts enriched with calendar, state and country attributes';
 COMMENT ON VIEW vw_city_temperature IS 'City temperature facts enriched with calendar and geographic attributes';
 COMMENT ON VIEW vw_major_city_temperature IS 'Major-city temperature facts enriched with calendar and geographic attributes';
-<<<<<<< HEAD
-=======
 
 -- -----------------------------------------------------------------------------
 -- 2. Kiểm tra row count và xem mẫu dữ liệu sau enrichment.
@@ -354,4 +321,3 @@ LEFT JOIN vw_global_temperature AS g
   ON g.date_id = ci.date_id
 ORDER BY ci.city_temperature_id
 LIMIT 10;
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
