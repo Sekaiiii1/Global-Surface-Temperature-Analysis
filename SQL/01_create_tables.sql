@@ -4,6 +4,19 @@
 -- Chạy trên database climate_db mới, trước 02_import_data.sql.
 -- =============================================================================
 
+-- Dừng sớm nếu Query Tool đang kết nối nhầm database.
+DO $$
+BEGIN
+    IF current_database() <> 'climate_db' THEN
+        RAISE EXCEPTION
+            'Đang kết nối database %, cần chuyển sang climate_db.',
+            current_database();
+    END IF;
+END
+$$;
+
+SET search_path TO public;
+
 BEGIN;
 
 -- 1. Staging layer: giữ gần với cấu trúc CSV nguồn.

@@ -1,8 +1,10 @@
 -- =============================================================================
 -- 03_views.sql
--- Tạo monthly views và view hợp nhất bàn giao cho Notebook 03.
+-- Tạo monthly views, view hợp nhất và kiểm tra chất lượng join.
 -- Chạy sau 02_import_data.sql.
 -- =============================================================================
+
+BEGIN;
 
 CREATE OR REPLACE VIEW vw_global_temperature AS
 SELECT
@@ -150,6 +152,8 @@ COMMENT ON VIEW vw_major_city_temperature IS
 COMMENT ON VIEW vw_city_temperature_enriched IS
     'City-grain view enriched with Country, Global and Major City values';
 
+COMMIT;
+
 -- Kiểm tra view hợp nhất không làm mất hoặc nhân bản dòng.
 SELECT
     (SELECT COUNT(*) FROM vw_city_temperature_enriched) AS view_row_count,
@@ -162,3 +166,138 @@ SELECT
         THEN 'PASS'
         ELSE 'FAIL'
     END AS status;
+
+-- Đo match rate bằng một lần quét view và phân biệt missing có chủ đích với lỗi join.
+WITH raw_country_keys AS (
+    SELECT DISTINCT dt, BTRIM(country) AS country
+    FROM staging_country
+    WHERE dt IS NOT NULL
+      AND NULLIF(BTRIM(country), '') IS NOT NULL
+),
+raw_global_dates AS (
+    SELECT DISTINCT dt
+    FROM staging_global
+    WHERE dt IS NOT NULL
+),
+metrics AS MATERIALIZED (
+    SELECT
+        COUNT(*)::BIGINT AS source_rows,
+        COUNT(v.country_match_id)::BIGINT AS country_matched_rows,
+        COUNT(*) FILTER (
+            WHERE v.country_match_id IS NULL
+        )::BIGINT AS country_unmatched_rows,
+        COUNT(*) FILTER (
+            WHERE v.country_match_id IS NULL
+              AND country_key.dt IS NULL
+        )::BIGINT AS country_expected_unmatched,
+        COUNT(*) FILTER (
+            WHERE v.country_match_id IS NULL
+              AND country_key.dt IS NOT NULL
+        )::BIGINT AS country_unexpected_unmatched,
+        COUNT(*) FILTER (
+            WHERE v.country_match_id IS NOT NULL
+              AND v.country_average_temperature IS NULL
+        )::BIGINT AS country_source_temperature_nulls,
+        COUNT(v.global_match_id)::BIGINT AS global_matched_rows,
+        COUNT(*) FILTER (
+            WHERE v.global_match_id IS NULL
+        )::BIGINT AS global_unmatched_rows,
+        COUNT(*) FILTER (
+            WHERE v.global_match_id IS NULL
+              AND global_date.dt IS NULL
+        )::BIGINT AS global_expected_unmatched,
+        COUNT(*) FILTER (
+            WHERE v.global_match_id IS NULL
+              AND global_date.dt IS NOT NULL
+        )::BIGINT AS global_unexpected_unmatched,
+        COUNT(*) FILTER (
+            WHERE v.global_match_id IS NOT NULL
+              AND v.land_average_temperature IS NULL
+        )::BIGINT AS global_source_temperature_nulls,
+        COUNT(v.major_city_match_id)::BIGINT AS major_city_matched_rows,
+        COUNT(*) FILTER (
+            WHERE v.major_city_match_id IS NULL
+        )::BIGINT AS major_city_unmatched_rows,
+        COUNT(*) FILTER (
+            WHERE v.major_city_match_id IS NULL
+              AND v.is_major_city IS FALSE
+        )::BIGINT AS major_city_expected_unmatched,
+        COUNT(*) FILTER (
+            WHERE v.major_city_match_id IS NULL
+              AND v.is_major_city IS TRUE
+        )::BIGINT AS major_city_unexpected_unmatched,
+        COUNT(*) FILTER (
+            WHERE v.major_city_match_id IS NOT NULL
+              AND v.major_city_average_temperature IS NULL
+        )::BIGINT AS major_city_source_temperature_nulls
+    FROM vw_city_temperature_enriched AS v
+    LEFT JOIN raw_country_keys AS country_key
+      ON country_key.dt = v.observation_date
+     AND country_key.country = v.country_name
+    LEFT JOIN raw_global_dates AS global_date
+      ON global_date.dt = v.observation_date
+),
+validation AS (
+    SELECT
+        'city_to_country'::TEXT AS enrichment,
+        source_rows,
+        country_matched_rows AS matched_rows,
+        country_unmatched_rows AS unmatched_rows,
+        country_expected_unmatched AS expected_unmatched,
+        country_unexpected_unmatched AS unexpected_unmatched,
+        country_source_temperature_nulls AS source_temperature_nulls
+    FROM metrics
+
+    UNION ALL
+
+    SELECT
+        'city_to_global',
+        source_rows,
+        global_matched_rows,
+        global_unmatched_rows,
+        global_expected_unmatched,
+        global_unexpected_unmatched,
+        global_source_temperature_nulls
+    FROM metrics
+
+    UNION ALL
+
+    SELECT
+        'city_to_major_city',
+        source_rows,
+        major_city_matched_rows,
+        major_city_unmatched_rows,
+        major_city_expected_unmatched,
+        major_city_unexpected_unmatched,
+        major_city_source_temperature_nulls
+    FROM metrics
+)
+SELECT
+    val.*,
+    (SELECT COUNT(*) FROM fact_city_temperature) AS fact_city_rows,
+    ROUND(
+        100.0 * val.matched_rows / NULLIF(val.source_rows, 0),
+        4
+    ) AS match_rate_percent,
+    CASE
+        WHEN val.source_rows = (SELECT COUNT(*) FROM fact_city_temperature)
+         AND val.unexpected_unmatched = 0
+        THEN 'PASS'
+        ELSE 'FAIL'
+    END AS status
+FROM validation AS val
+ORDER BY val.enrichment;
+
+-- Mẫu dữ liệu tích hợp dùng để kiểm tra trực quan.
+SELECT
+    observation_date,
+    city_name,
+    country_name,
+    city_average_temperature,
+    country_average_temperature,
+    land_average_temperature,
+    major_city_average_temperature,
+    is_major_city
+FROM vw_city_temperature_enriched
+ORDER BY city_temperature_id
+LIMIT 10;

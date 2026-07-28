@@ -1,53 +1,23 @@
 -- =============================================================================
 -- 02_import_data.sql
--- COPY bốn CSV, cắt staging_city theo data contract, nạp dimensions/facts.
+-- COPY và kiểm tra bốn CSV, cắt staging_city theo data contract,
+-- sau đó nạp dimensions/facts.
 -- Chạy trên database climate_db sau 01_create_tables.sql.
 -- Sửa đường dẫn COPY theo máy thực thi; dữ liệu City bị cắt trực tiếp.
 -- =============================================================================
 
-
--- -----------------------------------------------------------------------------
--- Kiểm tra dữ liệu City trước khi lọc
--- -----------------------------------------------------------------------------
-
--- Danh sách 20 quốc gia lớn/bắt buộc theo yêu cầu của bước cắt dữ liệu.
-WITH mandatory_countries(country) AS (
-    VALUES
-        ('Vietnam'), ('United States'), ('China'), ('India'), ('Russia'),
-        ('Brazil'), ('Japan'), ('Germany'), ('United Kingdom'), ('France'),
-        ('Canada'), ('Australia'), ('Italy'), ('South Korea'), ('Mexico'),
-        ('Indonesia'), ('Turkey'), ('Saudi Arabia'), ('Spain'), ('South Africa')
-),
-source_countries AS (
-    SELECT DISTINCT country
-    FROM staging_city
-    WHERE NULLIF(BTRIM(country), '') IS NOT NULL
-),
-source_stats AS (
-    SELECT
-        COUNT(*) AS source_rows,
-        COUNT(*) FILTER (
-            WHERE NULLIF(BTRIM(country), '') IS NULL
-        ) AS invalid_country_rows
-    FROM staging_city
-)
-SELECT
-    s.source_rows,
-    (SELECT COUNT(*) FROM source_countries) AS distinct_countries,
-    s.invalid_country_rows,
-    (
-        SELECT COUNT(*)
-        FROM mandatory_countries AS m
-        JOIN source_countries AS c USING (country)
-    ) AS mandatory_countries_found,
-    ARRAY(
-        SELECT m.country
-        FROM mandatory_countries AS m
-        LEFT JOIN source_countries AS c USING (country)
-        WHERE c.country IS NULL
-        ORDER BY m.country
-    ) AS missing_mandatory_countries
-FROM source_stats AS s;
+-- Script này dành cho database mới. Không nối thêm dữ liệu vào staging đã có sẵn.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM staging_global)
+       OR EXISTS (SELECT 1 FROM staging_country)
+       OR EXISTS (SELECT 1 FROM staging_city)
+       OR EXISTS (SELECT 1 FROM staging_major_city) THEN
+        RAISE EXCEPTION
+            'Staging tables không rỗng. Hãy dùng database mới hoặc chủ động làm rỗng bảng trước khi import.';
+    END IF;
+END
+$$;
 
 BEGIN;
 
@@ -150,6 +120,182 @@ WITH (
 );
 
 COMMIT;
+
+-- Nếu một file hoặc một dòng CSV không hợp lệ, PostgreSQL hủy toàn bộ transaction
+-- COPY ở trên; không có trạng thái chỉ import thành công một phần.
+ANALYZE staging_global;
+ANALYZE staging_country;
+ANALYZE staging_city;
+ANALYZE staging_major_city;
+
+
+-- -----------------------------------------------------------------------------
+-- Xác nhận import đủ dòng và metadata tự sinh
+-- -----------------------------------------------------------------------------
+
+WITH expected(dataset, expected_rows) AS (
+    VALUES
+        ('global', 3192::BIGINT),
+        ('country', 577462::BIGINT),
+        ('city', 8599212::BIGINT),
+        ('major_city', 239177::BIGINT)
+),
+actual(dataset, actual_rows, min_staging_id, max_staging_id, null_loaded_at) AS (
+    SELECT
+        'global',
+        COUNT(*),
+        MIN(staging_id),
+        MAX(staging_id),
+        COUNT(*) FILTER (WHERE loaded_at IS NULL)
+    FROM staging_global
+    UNION ALL
+    SELECT
+        'country',
+        COUNT(*),
+        MIN(staging_id),
+        MAX(staging_id),
+        COUNT(*) FILTER (WHERE loaded_at IS NULL)
+    FROM staging_country
+    UNION ALL
+    SELECT
+        'city',
+        COUNT(*),
+        MIN(staging_id),
+        MAX(staging_id),
+        COUNT(*) FILTER (WHERE loaded_at IS NULL)
+    FROM staging_city
+    UNION ALL
+    SELECT
+        'major_city',
+        COUNT(*),
+        MIN(staging_id),
+        MAX(staging_id),
+        COUNT(*) FILTER (WHERE loaded_at IS NULL)
+    FROM staging_major_city
+)
+SELECT
+    e.dataset,
+    e.expected_rows,
+    a.actual_rows,
+    a.actual_rows - e.expected_rows AS difference,
+    a.min_staging_id,
+    a.max_staging_id,
+    a.null_loaded_at,
+    CASE
+        WHEN a.actual_rows = e.expected_rows
+         AND a.min_staging_id = 1
+         AND a.max_staging_id = a.actual_rows
+         AND a.null_loaded_at = 0
+        THEN 'PASS'
+        ELSE 'FAIL'
+    END AS status
+FROM expected AS e
+JOIN actual AS a USING (dataset)
+ORDER BY e.dataset;
+
+
+-- -----------------------------------------------------------------------------
+-- Kiểm tra schema, primary key và duplicate theo grain nghiệp vụ
+-- -----------------------------------------------------------------------------
+
+SELECT
+    table_name,
+    ordinal_position,
+    column_name,
+    data_type,
+    is_nullable,
+    column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name IN (
+      'staging_global',
+      'staging_country',
+      'staging_city',
+      'staging_major_city'
+  )
+ORDER BY table_name, ordinal_position;
+
+SELECT
+    tc.table_name,
+    tc.constraint_name,
+    kcu.column_name
+FROM information_schema.table_constraints AS tc
+JOIN information_schema.key_column_usage AS kcu
+  ON kcu.constraint_schema = tc.constraint_schema
+ AND kcu.constraint_name = tc.constraint_name
+WHERE tc.table_schema = 'public'
+  AND tc.constraint_type = 'PRIMARY KEY'
+  AND tc.table_name IN (
+      'staging_global',
+      'staging_country',
+      'staging_city',
+      'staging_major_city'
+  )
+ORDER BY tc.table_name;
+
+SELECT
+    'global' AS dataset,
+    COUNT(*) - COUNT(DISTINCT (dt)) AS duplicate_business_keys
+FROM staging_global
+UNION ALL
+SELECT
+    'country',
+    COUNT(*) - COUNT(DISTINCT (dt, country))
+FROM staging_country
+UNION ALL
+SELECT
+    'city',
+    COUNT(*) - COUNT(DISTINCT (dt, city, country, latitude, longitude))
+FROM staging_city
+UNION ALL
+SELECT
+    'major_city',
+    COUNT(*) - COUNT(DISTINCT (dt, city, country, latitude, longitude))
+FROM staging_major_city
+ORDER BY dataset;
+
+
+-- -----------------------------------------------------------------------------
+-- Kiểm tra dữ liệu City nguyên bản trước khi lọc
+-- -----------------------------------------------------------------------------
+
+WITH mandatory_countries(country) AS (
+    VALUES
+        ('Vietnam'), ('United States'), ('China'), ('India'), ('Russia'),
+        ('Brazil'), ('Japan'), ('Germany'), ('United Kingdom'), ('France'),
+        ('Canada'), ('Australia'), ('Italy'), ('South Korea'), ('Mexico'),
+        ('Indonesia'), ('Turkey'), ('Saudi Arabia'), ('Spain'), ('South Africa')
+),
+source_countries AS (
+    SELECT DISTINCT country
+    FROM staging_city
+    WHERE NULLIF(BTRIM(country), '') IS NOT NULL
+),
+source_stats AS (
+    SELECT
+        COUNT(*) AS source_rows,
+        COUNT(*) FILTER (
+            WHERE NULLIF(BTRIM(country), '') IS NULL
+        ) AS invalid_country_rows
+    FROM staging_city
+)
+SELECT
+    s.source_rows,
+    (SELECT COUNT(*) FROM source_countries) AS distinct_countries,
+    s.invalid_country_rows,
+    (
+        SELECT COUNT(*)
+        FROM mandatory_countries AS m
+        JOIN source_countries AS c USING (country)
+    ) AS mandatory_countries_found,
+    ARRAY(
+        SELECT m.country
+        FROM mandatory_countries AS m
+        LEFT JOIN source_countries AS c USING (country)
+        WHERE c.country IS NULL
+        ORDER BY m.country
+    ) AS missing_mandatory_countries
+FROM source_stats AS s;
 
 
 -- -----------------------------------------------------------------------------
