@@ -207,7 +207,7 @@ fact_counts(dataset, expected_rows, actual_rows) AS (
         ),
         (
             'city',
-            5010113::BIGINT,
+            5637812::BIGINT,
             (SELECT COUNT(*) FROM fact_city_temperature)
         ),
         (
@@ -218,14 +218,14 @@ fact_counts(dataset, expected_rows, actual_rows) AS (
 ),
 staging_city_contract AS (
     SELECT
-        COUNT(*) = 5010113
-        AND COUNT(DISTINCT country) = 80
+        COUNT(*) = 5637812
+        AND COUNT(DISTINCT BTRIM(country)) = 50
         AND COUNT(DISTINCT dt) = 1809
         AND MIN(dt) = DATE '1863-01-01'
         AND MAX(dt) = DATE '2013-09-01'
         AND COUNT(*) FILTER (
             WHERE average_temperature IS NULL
-        ) = 43101
+        ) = 58727
         AND COUNT(*) FILTER (
             WHERE dt < DATE '1863-01-01'
                OR dt >= DATE '2014-01-01'
@@ -339,9 +339,9 @@ checks(check_name, passed) AS (
 
     SELECT
         'unified_view_and_enrichment',
-        actual_rows = 5010113
-        -- 410 dòng City không có khóa Country tương ứng trong dữ liệu nguồn.
-        AND country_unmatched_rows = 410
+        actual_rows = 5637812
+        -- Top-50 quốc gia được chọn từ cùng bảng City nên mọi dòng đều ghép được Country.
+        AND country_unmatched_rows = 0
         AND global_unmatched_rows = 0
         AND unexpected_major_city_unmatched_rows = 0
     FROM view_audit

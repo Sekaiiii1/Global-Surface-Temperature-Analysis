@@ -256,20 +256,25 @@ ORDER BY dataset;
 
 
 -- -----------------------------------------------------------------------------
--- Kiểm tra dữ liệu City nguyên bản trước khi lọc
+-- Kiểm tra dữ liệu City nguyên bản trước khi lọc theo Top-50
 -- -----------------------------------------------------------------------------
 
-WITH mandatory_countries(country) AS (
-    VALUES
-        ('Vietnam'), ('United States'), ('China'), ('India'), ('Russia'),
-        ('Brazil'), ('Japan'), ('Germany'), ('United Kingdom'), ('France'),
-        ('Canada'), ('Australia'), ('Italy'), ('South Korea'), ('Mexico'),
-        ('Indonesia'), ('Turkey'), ('Saudi Arabia'), ('Spain'), ('South Africa')
-),
-source_countries AS (
-    SELECT DISTINCT country
+WITH country_counts AS (
+    SELECT
+        BTRIM(country) AS country,
+        COUNT(*)::BIGINT AS row_count
     FROM staging_city
     WHERE NULLIF(BTRIM(country), '') IS NOT NULL
+    GROUP BY BTRIM(country)
+),
+ranked_countries AS (
+    SELECT
+        country,
+        row_count,
+        ROW_NUMBER() OVER (
+            ORDER BY row_count DESC, country
+        ) AS selection_rank
+    FROM country_counts
 ),
 source_stats AS (
     SELECT
@@ -281,174 +286,93 @@ source_stats AS (
 )
 SELECT
     s.source_rows,
-    (SELECT COUNT(*) FROM source_countries) AS distinct_countries,
+    (SELECT COUNT(*) FROM country_counts) AS distinct_countries,
     s.invalid_country_rows,
-    (
-        SELECT COUNT(*)
-        FROM mandatory_countries AS m
-        JOIN source_countries AS c USING (country)
-    ) AS mandatory_countries_found,
-    ARRAY(
-        SELECT m.country
-        FROM mandatory_countries AS m
-        LEFT JOIN source_countries AS c USING (country)
-        WHERE c.country IS NULL
-        ORDER BY m.country
-    ) AS missing_mandatory_countries
+    (SELECT COUNT(*) FROM ranked_countries WHERE selection_rank <= 50)
+        AS top_50_countries,
+    (SELECT COALESCE(SUM(row_count), 0)
+     FROM ranked_countries
+     WHERE selection_rank <= 50)
+        AS top_50_rows,
+    (SELECT MIN(row_count) FROM ranked_countries WHERE selection_rank <= 50)
+        AS smallest_top_50_count,
+    (SELECT MAX(row_count) FROM ranked_countries WHERE selection_rank <= 50)
+        AS largest_top_50_count
 FROM source_stats AS s;
 
 
+
+
 -- -----------------------------------------------------------------------------
--- Lọc 80 quốc gia mục tiêu
+-- Lọc dữ liệu giữ lại 50 quốc gia có nhiều bản ghi nhất
 -- -----------------------------------------------------------------------------
 
 BEGIN;
 
--- Tạo lại manifest quốc gia dùng cho thao tác cắt trực tiếp.
+-- Tạo lại manifest động từ số lượng bản ghi của từng quốc gia.
 DROP TABLE IF EXISTS city_target_countries;
 
--- Lưu cố định 80 quốc gia để kết quả không thay đổi giữa các lần chạy.
 CREATE TABLE city_target_countries (
     country TEXT PRIMARY KEY,
-    selection_group TEXT NOT NULL CHECK (
-        selection_group IN ('mandatory', 'additional')
-    )
+    selection_rank INTEGER NOT NULL UNIQUE,
+    selection_group TEXT NOT NULL CHECK (selection_group = 'top_50')
 );
 
-INSERT INTO city_target_countries (country, selection_group)
-VALUES
-    ('Vietnam', 'mandatory'),
-    ('United States', 'mandatory'),
-    ('China', 'mandatory'),
-    ('India', 'mandatory'),
-    ('Russia', 'mandatory'),
-    ('Brazil', 'mandatory'),
-    ('Japan', 'mandatory'),
-    ('Germany', 'mandatory'),
-    ('United Kingdom', 'mandatory'),
-    ('France', 'mandatory'),
-    ('Canada', 'mandatory'),
-    ('Australia', 'mandatory'),
-    ('Italy', 'mandatory'),
-    ('South Korea', 'mandatory'),
-    ('Mexico', 'mandatory'),
-    ('Indonesia', 'mandatory'),
-    ('Turkey', 'mandatory'),
-    ('Saudi Arabia', 'mandatory'),
-    ('Spain', 'mandatory'),
-    ('South Africa', 'mandatory'),
-    ('Algeria', 'additional'),
-    ('Angola', 'additional'),
-    ('Azerbaijan', 'additional'),
-    ('Bahrain', 'additional'),
-    ('Bangladesh', 'additional'),
-    ('Bolivia', 'additional'),
-    ('Botswana', 'additional'),
-    ('Burundi', 'additional'),
-    ('Cameroon', 'additional'),
-    ('Chad', 'additional'),
-    ('Colombia', 'additional'),
-    ('Congo (Democratic Republic Of The)', 'additional'),
-    ('Costa Rica', 'additional'),
-    ('Denmark', 'additional'),
-    ('Djibouti', 'additional'),
-    ('Ecuador', 'additional'),
-    ('El Salvador', 'additional'),
-    ('Eritrea', 'additional'),
-    ('Finland', 'additional'),
-    ('Gabon', 'additional'),
-    ('Ghana', 'additional'),
-    ('Guinea Bissau', 'additional'),
-    ('Haiti', 'additional'),
-    ('Iran', 'additional'),
-    ('Iraq', 'additional'),
-    ('Kazakhstan', 'additional'),
-    ('Laos', 'additional'),
-    ('Lebanon', 'additional'),
-    ('Lesotho', 'additional'),
-    ('Libya', 'additional'),
-    ('Lithuania', 'additional'),
-    ('Macedonia', 'additional'),
-    ('Madagascar', 'additional'),
-    ('Malaysia', 'additional'),
-    ('Mauritius', 'additional'),
-    ('Moldova', 'additional'),
-    ('Mozambique', 'additional'),
-    ('New Zealand', 'additional'),
-    ('Nicaragua', 'additional'),
-    ('Norway', 'additional'),
-    ('Oman', 'additional'),
-    ('Panama', 'additional'),
-    ('Poland', 'additional'),
-    ('Romania', 'additional'),
-    ('Rwanda', 'additional'),
-    ('Serbia', 'additional'),
-    ('Sierra Leone', 'additional'),
-    ('Slovakia', 'additional'),
-    ('Slovenia', 'additional'),
-    ('Sudan', 'additional'),
-    ('Swaziland', 'additional'),
-    ('Switzerland', 'additional'),
-    ('Syria', 'additional'),
-    ('Togo', 'additional'),
-    ('Turkmenistan', 'additional'),
-    ('Ukraine', 'additional'),
-    ('Uruguay', 'additional'),
-    ('Uzbekistan', 'additional'),
-    ('Yemen', 'additional'),
-    ('Zambia', 'additional');
+-- Xếp hạng giảm dần theo số bản ghi; tên quốc gia là tiêu chí phá hòa.
+INSERT INTO city_target_countries (country, selection_rank, selection_group)
+SELECT
+    BTRIM(country) AS country,
+    ROW_NUMBER() OVER (
+        ORDER BY COUNT(*) DESC, BTRIM(country)
+    )::INTEGER AS selection_rank,
+    'top_50' AS selection_group
+FROM staging_city
+WHERE NULLIF(BTRIM(country), '') IS NOT NULL
+GROUP BY BTRIM(country)
+ORDER BY COUNT(*) DESC, BTRIM(country)
+LIMIT 50;
 
--- Dừng transaction nếu danh sách không có đúng 20 + 60 quốc gia.
+-- Dừng transaction nếu manifest không đủ đúng 50 quốc gia duy nhất.
 DO $$
 DECLARE
     total_count INTEGER;
-    mandatory_count INTEGER;
+    distinct_rank_count INTEGER;
 BEGIN
-    SELECT
-        COUNT(*),
-        COUNT(*) FILTER (WHERE selection_group = 'mandatory')
-    INTO total_count, mandatory_count
+    SELECT COUNT(*), COUNT(DISTINCT selection_rank)
+    INTO total_count, distinct_rank_count
     FROM city_target_countries;
 
-    IF total_count <> 80 OR mandatory_count <> 20 THEN
+    IF total_count <> 50 OR distinct_rank_count <> 50 THEN
         RAISE EXCEPTION
-            'Danh sách mục tiêu không hợp lệ: tổng %, bắt buộc %.',
-            total_count, mandatory_count;
+            'Manifest Top-50 không hợp lệ: tổng %, thứ hạng khác nhau %.',
+            total_count, distinct_rank_count;
     END IF;
 END
 $$;
 
--- Xóa trực tiếp các dòng không thuộc danh sách 80 quốc gia.
+-- Xóa trực tiếp các dòng không thuộc Top-50 quốc gia.
 DELETE FROM staging_city AS s
 WHERE NOT EXISTS (
     SELECT 1
     FROM city_target_countries AS t
-    WHERE t.country = s.country
+    WHERE t.country = BTRIM(s.country)
 );
 
--- Không cho phép commit nếu kết quả lọc quốc gia sai data contract.
+-- Chỉ commit nếu kết quả lọc khớp data contract đã khảo sát ở notebook 01.
 DO $$
 DECLARE
     remaining_rows BIGINT;
     remaining_countries INTEGER;
-    mandatory_retained INTEGER;
 BEGIN
-    SELECT COUNT(*), COUNT(DISTINCT country)
+    SELECT COUNT(*), COUNT(DISTINCT BTRIM(country))
     INTO remaining_rows, remaining_countries
     FROM staging_city;
 
-    SELECT COUNT(DISTINCT s.country)
-    INTO mandatory_retained
-    FROM staging_city AS s
-    JOIN city_target_countries AS t USING (country)
-    WHERE t.selection_group = 'mandatory';
-
-    IF remaining_rows <> 6907065
-       OR remaining_countries <> 80
-       OR mandatory_retained <> 20 THEN
+    IF remaining_rows <> 7658922
+       OR remaining_countries <> 50 THEN
         RAISE EXCEPTION
-            'Lọc quốc gia sai data contract: rows %, countries %, mandatory %.',
-            remaining_rows, remaining_countries, mandatory_retained;
+            'Lọc Top-50 sai data contract: rows %, countries %.',
+            remaining_rows, remaining_countries;
     END IF;
 END
 $$;
@@ -457,31 +381,17 @@ COMMIT;
 
 ANALYZE staging_city;
 
--- Kiểm tra kết quả sau khi chỉ lọc theo quốc gia.
+-- Kiểm tra kết quả sau khi chỉ lọc theo Top-50 quốc gia.
 SELECT
     COUNT(*) AS rows_after_country_filter,
-    COUNT(DISTINCT country) AS selected_countries,
-    COUNT(DISTINCT country) FILTER (
-        WHERE country IN (
-            SELECT country
-            FROM city_target_countries
-            WHERE selection_group = 'mandatory'
-        )
-    ) AS mandatory_countries_retained,
+    COUNT(DISTINCT BTRIM(country)) AS selected_countries,
     MIN(dt) AS min_date,
     MAX(dt) AS max_date,
     COUNT(*) FILTER (WHERE average_temperature IS NULL)
         AS missing_temperature_rows,
     CASE
-        WHEN COUNT(*) = 6907065
-         AND COUNT(DISTINCT country) = 80
-         AND COUNT(DISTINCT country) FILTER (
-             WHERE country IN (
-                 SELECT country
-                 FROM city_target_countries
-                 WHERE selection_group = 'mandatory'
-             )
-         ) = 20
+        WHEN COUNT(*) = 7658922
+         AND COUNT(DISTINCT BTRIM(country)) = 50
         THEN 'PASS'
         ELSE 'FAIL'
     END AS status
@@ -527,7 +437,7 @@ DECLARE
 BEGIN
     SELECT
         COUNT(*),
-        COUNT(DISTINCT country),
+        COUNT(DISTINCT BTRIM(country)),
         COUNT(DISTINCT dt),
         MIN(dt),
         MAX(dt),
@@ -547,12 +457,12 @@ BEGIN
         checked_invalid_dates
     FROM staging_city;
 
-    IF checked_rows <> 5010113
-       OR checked_countries <> 80
+    IF checked_rows <> 5637812
+       OR checked_countries <> 50
        OR checked_dates <> 1809
        OR checked_min_date <> DATE '1863-01-01'
        OR checked_max_date <> DATE '2013-09-01'
-       OR checked_missing_temperature <> 43101
+       OR checked_missing_temperature <> 58727
        OR checked_invalid_dates <> 0 THEN
         RAISE EXCEPTION
             'Cắt thời gian sai data contract: rows %, countries %, dates %, min %, max %, missing %, invalid %.',
@@ -571,7 +481,7 @@ ANALYZE staging_city;
 WITH validation AS (
     SELECT
         COUNT(*) AS final_rows,
-        COUNT(DISTINCT country) AS final_countries,
+        COUNT(DISTINCT BTRIM(country)) AS final_countries,
         COUNT(DISTINCT dt) AS final_distinct_dates,
         MIN(dt) AS final_min_date,
         MAX(dt) AS final_max_date,
@@ -593,12 +503,12 @@ SELECT
     missing_temperature_rows,
     invalid_date_rows,
     CASE
-        WHEN final_rows = 5010113
-         AND final_countries = 80
+        WHEN final_rows = 5637812
+         AND final_countries = 50
          AND final_distinct_dates = 1809
          AND final_min_date = DATE '1863-01-01'
          AND final_max_date = DATE '2013-09-01'
-         AND missing_temperature_rows = 43101
+         AND missing_temperature_rows = 58727
          AND invalid_date_rows = 0
         THEN 'PASS'
         ELSE 'FAIL'
@@ -903,7 +813,7 @@ WITH expected(dataset, expected_rows) AS (
     VALUES
         ('global', 3192::BIGINT),
         ('country', 577462::BIGINT),
-        ('city', 5010113::BIGINT),
+        ('city', 5637812::BIGINT),
         ('major_city', 239177::BIGINT)
 ),
 actual(dataset, fact_table, actual_rows) AS (
