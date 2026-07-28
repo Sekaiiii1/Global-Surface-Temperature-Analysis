@@ -237,13 +237,13 @@ view_audit AS (
     SELECT
         COUNT(*)::BIGINT AS actual_rows,
         COUNT(*) FILTER (
-            WHERE country_match_id IS NULL
+            WHERE NOT country_matched
         )::BIGINT AS country_unmatched_rows,
         COUNT(*) FILTER (
-            WHERE global_match_id IS NULL
+            WHERE NOT global_matched
         )::BIGINT AS global_unmatched_rows,
         COUNT(*) FILTER (
-            WHERE major_city_match_id IS NULL
+            WHERE NOT major_city_matched
               AND is_major_city IS TRUE
         )::BIGINT AS unexpected_major_city_unmatched_rows
     FROM vw_city_temperature_enriched
@@ -376,7 +376,8 @@ SELECT
     (SELECT COUNT(*) FROM fact_city_temperature) AS expected_rows,
     COUNT(*) AS actual_rows,
     COUNT(*) - (SELECT COUNT(*) FROM fact_city_temperature) AS difference,
-    'source_staging_id' AS lineage_column,
+    'observation_date + country_name + city_name + latitude + longitude'
+        AS lineage_columns,
     CASE
         WHEN COUNT(*) = (SELECT COUNT(*) FROM fact_city_temperature)
         THEN 'PASS'
@@ -386,5 +387,5 @@ FROM vw_city_temperature_enriched;
 
 SELECT *
 FROM vw_city_temperature_enriched
-ORDER BY city_temperature_id
+ORDER BY country_name, city_name, observation_date
 LIMIT 10;

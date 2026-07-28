@@ -94,29 +94,27 @@ JOIN dim_city AS ci ON ci.city_id = f.city_id
 JOIN dim_country AS c ON c.country_id = ci.country_id;
 
 -- View hợp nhất: City là grain gốc, các nguồn còn lại LEFT JOIN tối đa một dòng.
-CREATE OR REPLACE VIEW vw_city_temperature_enriched AS
+-- DROP trước vì cấu trúc view đã loại bỏ các cột ID khỏi đầu ra.
+DROP VIEW IF EXISTS vw_city_temperature_enriched;
+
+CREATE VIEW vw_city_temperature_enriched AS
 SELECT
-    ci.city_temperature_id,
-    ci.source_staging_id,
-    d.date_id,
     d.full_date AS observation_date,
     d.year,
     d.month,
     d.quarter,
     d.decade,
-    city.city_id,
     city.city_name,
-    country.country_id,
     country.country_name,
     city.latitude,
     city.longitude,
     city.is_major_city,
     ci.average_temperature AS city_average_temperature,
     ci.average_temperature_uncertainty AS city_average_temperature_uncertainty,
-    co.country_temperature_id AS country_match_id,
+    (co.date_id IS NOT NULL) AS country_matched,
     co.average_temperature AS country_average_temperature,
     co.average_temperature_uncertainty AS country_average_temperature_uncertainty,
-    g.global_temperature_id AS global_match_id,
+    (g.date_id IS NOT NULL) AS global_matched,
     g.land_average_temperature,
     g.land_average_temperature_uncertainty,
     g.land_max_temperature,
@@ -125,7 +123,7 @@ SELECT
     g.land_min_temperature_uncertainty,
     g.land_and_ocean_average_temperature,
     g.land_and_ocean_average_temperature_uncertainty,
-    mc.major_city_temperature_id AS major_city_match_id,
+    (mc.date_id IS NOT NULL) AS major_city_matched,
     mc.average_temperature AS major_city_average_temperature,
     mc.average_temperature_uncertainty AS major_city_average_temperature_uncertainty
 FROM fact_city_temperature AS ci
@@ -150,7 +148,7 @@ COMMENT ON VIEW vw_city_temperature IS
 COMMENT ON VIEW vw_major_city_temperature IS
     'Major-city temperature facts enriched with calendar and geographic attributes';
 COMMENT ON VIEW vw_city_temperature_enriched IS
-    'City-grain view enriched with Country, Global and Major City values';
+    'City-grain view with direct business values and boolean enrichment flags';
 
 COMMIT;
 
@@ -182,52 +180,52 @@ raw_global_dates AS (
 metrics AS MATERIALIZED (
     SELECT
         COUNT(*)::BIGINT AS source_rows,
-        COUNT(v.country_match_id)::BIGINT AS country_matched_rows,
+        COUNT(*) FILTER (WHERE v.country_matched)::BIGINT AS country_matched_rows,
         COUNT(*) FILTER (
-            WHERE v.country_match_id IS NULL
+            WHERE NOT v.country_matched
         )::BIGINT AS country_unmatched_rows,
         COUNT(*) FILTER (
-            WHERE v.country_match_id IS NULL
+            WHERE NOT v.country_matched
               AND country_key.dt IS NULL
         )::BIGINT AS country_expected_unmatched,
         COUNT(*) FILTER (
-            WHERE v.country_match_id IS NULL
+            WHERE NOT v.country_matched
               AND country_key.dt IS NOT NULL
         )::BIGINT AS country_unexpected_unmatched,
         COUNT(*) FILTER (
-            WHERE v.country_match_id IS NOT NULL
+            WHERE v.country_matched
               AND v.country_average_temperature IS NULL
         )::BIGINT AS country_source_temperature_nulls,
-        COUNT(v.global_match_id)::BIGINT AS global_matched_rows,
+        COUNT(*) FILTER (WHERE v.global_matched)::BIGINT AS global_matched_rows,
         COUNT(*) FILTER (
-            WHERE v.global_match_id IS NULL
+            WHERE NOT v.global_matched
         )::BIGINT AS global_unmatched_rows,
         COUNT(*) FILTER (
-            WHERE v.global_match_id IS NULL
+            WHERE NOT v.global_matched
               AND global_date.dt IS NULL
         )::BIGINT AS global_expected_unmatched,
         COUNT(*) FILTER (
-            WHERE v.global_match_id IS NULL
+            WHERE NOT v.global_matched
               AND global_date.dt IS NOT NULL
         )::BIGINT AS global_unexpected_unmatched,
         COUNT(*) FILTER (
-            WHERE v.global_match_id IS NOT NULL
+            WHERE v.global_matched
               AND v.land_average_temperature IS NULL
         )::BIGINT AS global_source_temperature_nulls,
-        COUNT(v.major_city_match_id)::BIGINT AS major_city_matched_rows,
+        COUNT(*) FILTER (WHERE v.major_city_matched)::BIGINT AS major_city_matched_rows,
         COUNT(*) FILTER (
-            WHERE v.major_city_match_id IS NULL
+            WHERE NOT v.major_city_matched
         )::BIGINT AS major_city_unmatched_rows,
         COUNT(*) FILTER (
-            WHERE v.major_city_match_id IS NULL
+            WHERE NOT v.major_city_matched
               AND v.is_major_city IS FALSE
         )::BIGINT AS major_city_expected_unmatched,
         COUNT(*) FILTER (
-            WHERE v.major_city_match_id IS NULL
+            WHERE NOT v.major_city_matched
               AND v.is_major_city IS TRUE
         )::BIGINT AS major_city_unexpected_unmatched,
         COUNT(*) FILTER (
-            WHERE v.major_city_match_id IS NOT NULL
+            WHERE v.major_city_matched
               AND v.major_city_average_temperature IS NULL
         )::BIGINT AS major_city_source_temperature_nulls
     FROM vw_city_temperature_enriched AS v
@@ -299,5 +297,5 @@ SELECT
     major_city_average_temperature,
     is_major_city
 FROM vw_city_temperature_enriched
-ORDER BY city_temperature_id
+ORDER BY country_name, city_name, observation_date
 LIMIT 10;
