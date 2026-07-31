@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# CLIMATE-CHANGE
-=======
 # Climate Change: Earth Surface Temperature Analysis
 
 Quy trình phân tích và machine learning cho bộ dữ liệu nhiệt độ bề mặt Trái Đất (Berkeley Earth):
@@ -69,4 +66,3 @@ Chạy các notebook theo đúng thứ tự, mỗi notebook chạy từ trên xu
 - File output lớn trong `data/processed/` (đặc biệt `cleaned_city.csv`) nên coi là sản phẩm tái tạo
   từ code; cân nhắc không commit các file này để tránh phình repo.
 - Mọi dữ liệu đã làm sạch phải tái tạo được bằng cách chạy lại notebook, không sửa tay `data/raw/`.
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
