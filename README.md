@@ -9,15 +9,15 @@ từ khảo sát dữ liệu → PostgreSQL ETL → làm sạch → EDA → feat
 
 | Thành phần | Trạng thái |
 |---|---|
-| `notebooks/01_data_understanding.ipynb` | ✅ Hoàn thành |
-| `notebooks/02_postgresql_pipeline.ipynb` + `SQL/` | ✅ Hoàn thành |
-| `notebooks/03_data_cleaning.ipynb` | ✅ Hoàn thành (đọc PostgreSQL, tự fallback CSV) |
-| `notebooks/04–07`, `app/`, `models/` | 🚧 Đang phát triển |
+| `notebooks_v1/01_data_understanding.ipynb` và `notebooks_v2/01_data_understanding.ipynb` | ✅ Hoàn thành |
+| `notebooks_v1/02_postgresql_pipeline.ipynb`, `notebooks_v2/02_postgresql_pipeline.ipynb` + `SQL/` | ✅ Hoàn thành |
+| `notebooks_v1/03_data_cleaning.ipynb` và `notebooks_v2/03_data_cleaning.ipynb` | ✅ Hoàn thành (đọc PostgreSQL, tự fallback CSV) |
+| Notebook `04–07` trong `notebooks_v1/` và `notebooks_v2/`, `app/`, `models/` | 🚧 Đang phát triển |
 
 ## Yêu cầu môi trường
 
 - **Python** 3.10+ (đã kiểm thử với Python 3.13)
-- **PostgreSQL** 15+ (khuyến nghị 18) — cần cho `notebooks/02`; `notebooks/03` có thể chạy không cần DB (đọc CSV)
+- **PostgreSQL** 15+ (khuyến nghị 18) — cần cho Notebook 02; Notebook 03 có thể chạy không cần DB (đọc CSV)
 - Git
 
 ## Cài đặt
@@ -45,7 +45,7 @@ python -m pip install -r requirements.txt
 
 ## Chạy pipeline
 
-Chạy các notebook theo đúng thứ tự, mỗi notebook chạy từ trên xuống:
+Chọn một thư mục phiên bản (`notebooks_v1/` hoặc `notebooks_v2/`), sau đó chạy các notebook trong cùng thư mục theo đúng thứ tự từ trên xuống:
 
 ```text
 01_data_understanding  →  02_postgresql_pipeline  →  03_data_cleaning  →  04..07

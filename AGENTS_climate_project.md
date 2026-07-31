@@ -38,23 +38,32 @@ project-name/
 │
 ├── docs/                            # Project documentation
 │
-├── notebooks/
+├── notebooks_v1/                     # Notebook version 1
 │   ├── 01_data_understanding.ipynb  # Read CSV, inspect and explore data
 │   ├── 02_postgresql_pipeline.ipynb # PostgreSQL ETL pipeline
 │   ├── 03_data_cleaning.ipynb       # Missing values, outliers, cleaning
 │   ├── 04_eda_visualization.ipynb   # EDA and visualizations
 │   ├── 05_feature_engineering.ipynb # Feature creation and insights
-│   ├── 06_machine_learning.ipynb    # Train, test and compare models
-│   └── 07_prediction_demo.ipynb     # Load trained model and predict
+│   ├── 06_machine_learning.ipynb    # Model training and evaluation
+│   └── 07_prediction_demo.ipynb     # Prediction demo
 │
-├── sql/
+├── notebooks_v2/                     # Notebook version 2, same file layout
+│   ├── 01_data_understanding.ipynb
+│   ├── 02_postgresql_pipeline.ipynb
+│   ├── 03_data_cleaning.ipynb
+│   ├── 04_eda_visualization.ipynb
+│   ├── 05_feature_engineering.ipynb
+│   ├── 06_machine_learning.ipynb
+│   └── 07_prediction_demo.ipynb
+│
+├── SQL/
 │   ├── 01_create_tables.sql         # Create PostgreSQL tables
 │   ├── 02_import_data.sql           # Import data into PostgreSQL
 │   ├── 03_views.sql                 # Create database views
 │   ├── 04_aggregation.sql           # Aggregation and analysis queries
 │   └── 05_indexes.sql               # Create database indexes
 │
-├── prompts/                         # Prompts used with AI agents
+├── prompt/                          # Prompts used with AI agents
 │
 ├── app/                             # Streamlit and FastAPI application
 │   ├── streamlit_app.py             # Main Streamlit application
@@ -214,11 +223,11 @@ Required tasks:
 Expected related files:
 
 ```text
-sql/01_create_tables.sql
-sql/02_import_data.sql
-sql/03_views.sql
-sql/04_aggregation.sql
-sql/05_indexes.sql
+SQL/01_create_tables.sql
+SQL/02_import_data.sql
+SQL/03_views.sql
+SQL/04_aggregation.sql
+SQL/05_indexes.sql
 ```
 
 ---
@@ -577,7 +586,7 @@ reports/images/
 Primary work:
 
 ```text
-notebooks/01_data_understanding.ipynb
+notebooks_v1/01_data_understanding.ipynb hoặc notebooks_v2/01_data_understanding.ipynb
 README.md
 Task_Tracker.xlsx
 Project integration
@@ -597,8 +606,8 @@ Responsibilities:
 Primary work:
 
 ```text
-notebooks/02_postgresql_pipeline.ipynb
-sql/
+notebooks_v1/02_postgresql_pipeline.ipynb hoặc notebooks_v2/02_postgresql_pipeline.ipynb
+SQL/
 ```
 
 Responsibilities:
@@ -615,7 +624,7 @@ Responsibilities:
 Primary work:
 
 ```text
-notebooks/03_data_cleaning.ipynb
+notebooks_v1/03_data_cleaning.ipynb hoặc notebooks_v2/03_data_cleaning.ipynb
 data/processed/
 ```
 
@@ -632,7 +641,7 @@ Responsibilities:
 Primary work:
 
 ```text
-notebooks/04_eda_visualization.ipynb
+notebooks_v1/04_eda_visualization.ipynb hoặc notebooks_v2/04_eda_visualization.ipynb
 reports/images/
 ```
 
@@ -648,9 +657,9 @@ Responsibilities:
 Primary work:
 
 ```text
-notebooks/05_feature_engineering.ipynb
-notebooks/06_machine_learning.ipynb
-notebooks/07_prediction_demo.ipynb
+notebooks_v1/05_feature_engineering.ipynb hoặc notebooks_v2/05_feature_engineering.ipynb
+notebooks_v1/06_machine_learning.ipynb hoặc notebooks_v2/06_machine_learning.ipynb
+notebooks_v1/07_prediction_demo.ipynb hoặc notebooks_v2/07_prediction_demo.ipynb
 models/
 ```
 
