@@ -1,12 +1,3 @@
-<<<<<<< HEAD
-ipykernel>=6.29
-matplotlib>=3.8
-numpy>=1.26
-pandas>=2.2
-psycopg2-binary>=2.9
-python-dotenv>=1.0
-seaborn>=0.13
-=======
 # =============================================================================
 # Climate Change: Earth Surface Temperature Analysis — Python dependencies
 # Cài đặt:  python -m pip install -r requirements.txt
@@ -34,4 +25,3 @@ streamlit>=1.30
 fastapi>=0.110
 uvicorn>=0.27
 plotly>=5.18
->>>>>>> f71fd81b581143263877dc3d42fcacdb2af9fbab
