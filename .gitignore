@@ -222,3 +222,5 @@ data/raw/*
 !data/raw/README.md
 data/processed/
 nhom_5.zip
+# models/
+models/*
