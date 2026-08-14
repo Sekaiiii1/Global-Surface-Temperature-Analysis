@@ -1,37 +1,51 @@
-"""
-api.py — FastAPI backend.
-Chạy bằng: uvicorn app.api:app --reload
-"""
+"""FastAPI backend cho dự báo nhiệt độ kỳ vọng trong phạm vi 12 tháng."""
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from app.prediction import predict_temperature
+
+from app.prediction import predict_for_city_date
+
 
 app = FastAPI(title="Climate Temperature Prediction API")
 
 
-class PredictionInput(BaseModel):
+class CityDatePredictionInput(BaseModel):
+    """Ba thông tin duy nhất người dùng cần cung cấp."""
+
+    city_label: str
     year: int
     month: int
-    quarter: int
-    latitude: float
-    longitude: float
-    temp_lag_1: float
-    temp_roll_mean_12: float
-    temp_anomaly_lag_12: float
-    # ⚠️ điền đủ các field còn lại khớp với FEATURE_ORDER
 
 
 @app.get("/health")
-def health_check():
+def health_check() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/predict")
-def predict(input_data: PredictionInput):
+def _predict(input_data: CityDatePredictionInput) -> dict:
     try:
-        result = predict_temperature(input_data.dict())
-        return {"predicted_temperature_celsius": round(result, 2)}
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        result = predict_for_city_date(
+            city_label=input_data.city_label,
+            year=input_data.year,
+            month=input_data.month,
+        )
+        result["predicted_temperature_celsius"] = round(
+            result["predicted_temperature_celsius"], 2
+        )
+        return result
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/predict")
+def predict(input_data: CityDatePredictionInput) -> dict:
+    """Dự đoán bằng thành phố, năm và tháng tương lai."""
+    return _predict(input_data)
+
+
+@app.post("/predict/history", deprecated=True)
+def predict_legacy_endpoint(input_data: CityDatePredictionInput) -> dict:
+    """Endpoint cũ, giữ lại tạm thời để các client cũ không bị hỏng ngay."""
+    return _predict(input_data)
