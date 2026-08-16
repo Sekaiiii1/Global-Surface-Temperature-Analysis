@@ -3,7 +3,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from app.prediction import predict_for_city_date
+from app.prediction_service import predict_for_city_date
 
 
 app = FastAPI(title="Climate Temperature Prediction API")

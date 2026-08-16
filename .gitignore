@@ -221,6 +221,7 @@ __marimo__/
 data/raw/*
 !data/raw/README.md
 data/processed/
+data/incoming/
 nhom_5.zip
 # models/
 models/*
